@@ -69,19 +69,16 @@ ipc.on('fileDropped', function(event, filePath, type) {
 	}
 	fs.mkdirSync(newRevFolderPath);
 
-	/*
-		フォルダを読みこむ
-		んで書き出す際、辞書の内容を調べないといけない。
-		一番上がフォルダな必要がある。
-	*/
+
+	// record new or updated files
 	var dirsOrFiles = fs.readdirSync(filePath);
 	var basePath = filePath;
 	recordDirsAndFiles(basePath, dirsOrFiles, newRevision, oldRevision, baseFolderPath);
-
-	console.log("全部syncで書いたんで、ここまで来てからrendererに帰ってる。なんもしないけど。最終的には進捗とかかな。");
 });
 
-
+/**
+	load recorded files
+*/
 function loadLatestRecord () {
 	var latestRevision = recordedLatestRevision();
 	console.log("start exporting... revision:" + latestRevision);
@@ -110,11 +107,11 @@ function loadLatestRecord () {
 		fs.mkdirSync(exportCandidatePath);
 
 		var dirsOrFiles = fs.readdirSync(baseFolderPath);
-		loadRecordDirsAndFiles(baseFolderPath, dirsOrFiles, latestRevision);
+		loadRecordedDirsAndFiles(baseFolderPath, dirsOrFiles, latestRevision);
 	}
 }
 
-function loadRecordDirsAndFiles (basePath, files, baseRevision) {
+function loadRecordedDirsAndFiles (basePath, files, baseRevision) {
 	files.forEach(
 		function(fileOrDir) {
 			var isDir = fs.lstatSync(path.join(basePath, fileOrDir)).isDirectory();
@@ -126,7 +123,7 @@ function loadRecordDirsAndFiles (basePath, files, baseRevision) {
 
 				var basePath2 = path.join(basePath, fileOrDir);
 				var dirsOrFiles = fs.readdirSync(basePath2);
-				loadRecordDirsAndFiles(basePath2, dirsOrFiles, baseRevision);
+				loadRecordedDirsAndFiles(basePath2, dirsOrFiles, baseRevision);
 			} else {
 				if (fileOrDir.lastIndexOf(".", 0) === 0) return;
 				loadValidFile(basePath, fileOrDir, baseRevision);
@@ -176,6 +173,9 @@ function loadValidFile (basePath, fileName, baseRevision) {
 	fs.createReadStream(sourcePath).pipe(fs.createWriteStream(destPath));
 }
 
+/**
+	record files
+*/
 function recordDirsAndFiles (basePath, files, newRevision, oldRevision, baseFolderPath) {
 	files.forEach(
 		function(fileOrDir) {
