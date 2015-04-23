@@ -36,14 +36,23 @@ var ipc = require('ipc');
 
 ipc.on('synchronous-message', function(event, filePath, type) {
 	console.log("a:" + filePath, " b:" + type + " app.getPath:" + app.getPath("userCache"));
-	
+	var baseFolderPath = path.join(filePath, "..");
+
 	// 何が放り込まれても問題ない感じだと思う。
 
-	var dirData = {};
+	
+	
 	var newRevision = 1;
 	var oldRevision = 0;
 
-	var recFiles = function(basePath, files) {
+	// generate new revision folder
+	var newRevFolderPath = path.join(FILEMACHINE_POOL_ROOTPATH, newRevision.toString());
+	if (fs.existsSync(newRevFolderPath)) {
+		rm(newRevFolderPath);
+	}
+	fs.mkdirSync(newRevFolderPath);
+
+	var recFiles = function recFiles (basePath, files) {
 		files.forEach(
 			function(fileOrDir) {
 				var isDir = fs.lstatSync(path.join(basePath, fileOrDir)).isDirectory();
@@ -58,25 +67,25 @@ ipc.on('synchronous-message', function(event, filePath, type) {
 					);
 				} else {
 					var filePath1 = path.join(basePath, fileOrDir);
-					console.log("filePath1:" + filePath1);
-
+					
 					var oldRevFilePath = filePath1.replace(
-						"/Users/runnershigh/Desktop", 
+						baseFolderPath, 
 						path.join(FILEMACHINE_POOL_ROOTPATH, oldRevision.toString())
 					);
-					console.log("どのrevと比較するか、とかを入れるのがこの辺にくる気がする。");
-					var shouldCp = shouldCopy(filePath1, oldRevFilePath);
 
-					// 一個上のフォルダが無ければつくるしかないのか、、
-					// fs.exists('/etc/passwd', function (exists) {
-					// 	fs.mkdirSync();
-					// });
+					// copy as new file or make proxy file.
+
+					var shouldCp = shouldCopy(filePath1, oldRevFilePath);
 
 					if (shouldCp) {
 						var newRevDestPath = filePath1.replace(
-							"/Users/runnershigh/Desktop", 
+							baseFolderPath, 
 							path.join(FILEMACHINE_POOL_ROOTPATH, newRevision.toString())
 						);
+						var targetPathBase = path.join(newRevDestPath, "..");
+						if (!fs.existsSync(targetPathBase)) {
+							fs.mkdirSync(targetPathBase);
+						}
 						fs.createReadStream(filePath1).pipe(fs.createWriteStream(newRevDestPath));
 					} else {// proxyを作成
 						console.log("should make proxy:" + oldRevision);
@@ -87,7 +96,9 @@ ipc.on('synchronous-message', function(event, filePath, type) {
 	}
 
 	/*
-		ローディング処理を行って、終わったら返す。
+		フォルダを読みこむ
+		んで書き出す際、辞書の内容を調べないといけない。
+		一番上がフォルダな必要がある。
 	*/
 	fs.readdir(
 		filePath,
@@ -157,6 +168,22 @@ function shouldCopy (filePath, oldRevFilePath) {
 	// completely new file.
 	return true;
 }
+
+function rm(path) {
+    var files = [];
+    if( fs.existsSync(path) ) {
+        files = fs.readdirSync(path);
+        files.forEach(function(file,index){
+            var curPath = path + "/" + file;
+            if(fs.lstatSync(curPath).isDirectory()) { // recurse
+                rm(curPath);
+            } else { // delete file
+                fs.unlinkSync(curPath);
+            }
+        });
+        fs.rmdirSync(path);
+    }
+};
 
 // file-object ファイル読むのに使える。
 // https://github.com/atom/electron/blob/master/docs/api/file-object.md
