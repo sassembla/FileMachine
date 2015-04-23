@@ -9,19 +9,24 @@ var path = require('path');
 var crypto = require('crypto');
 var assert = require('assert');
 var ipc = require('ipc');
-
-
+var globalShortcut = require('global-shortcut');
 
 var mainWindow = null;
 var PREFIX_FILEEXT_PROXYFILE = ".prox";
 var FILEMACHINE_POOL_ROOTPATH = app.getPath("userCache");
-
+var FILEMACHINE_EXPORT_DEFAULTPATH = app.getPath("userDesktop");
 
 /*
 	app handlers
 */
 app.on('will-finish-launching', function () {
   console.log("will-finish-launching!");
+
+	var shortcutReg = globalShortcut.register('command+o', openRecord);
+	if (!shortcutReg) {
+		console.log("failed to register shortcut.");
+		app.quit();
+	}
 });
 
 app.on('ready', function() {
@@ -50,21 +55,9 @@ app.on('quit', function () {
 	folder dropped.
 */
 ipc.on('fileDropped', function(event, filePath, type) {
-	console.log("a:" + filePath, " b:" + type + " app.getPath:" + app.getPath("userCache"));
 	var baseFolderPath = path.join(filePath, "..");
 
-	// 何が放り込まれても問題ない感じだと思う。
-
-	var oldRevision = -1;
-
-	var revisonDirs = fs.readdirSync(FILEMACHINE_POOL_ROOTPATH);
-	for (var i = 0; i < revisonDirs.length; i++) {
-		var revNum = parseInt(revisonDirs[i]);
-		if (!isNaN(revNum)) {
-			oldRevision = revNum;
-		}
-	};
-
+	var oldRevision = recordedLatestRevision();
 	var newRevision = oldRevision + 1;
 	
 
@@ -84,14 +77,29 @@ ipc.on('fileDropped', function(event, filePath, type) {
 	var basePath = filePath;
 	recordDirsAndFiles(basePath, dirsOrFiles, newRevision, oldRevision, baseFolderPath);
 
-	console.log("ここまで来てから帰ってる、ってことはなんかできる。");
+	console.log("全部syncで書いたんで、ここまで来てからrendererに帰ってる。なんもしないけど。最終的には進捗とかかな。");
 });
 
-ipc.on('startExport', function() {
-	console.log("exp");
+
+function openRecord () {
+	var latestRevision = recordedLatestRevision();
+	var recordedFolderPath = path.join(FILEMACHINE_POOL_ROOTPATH, latestRevision.toString());
+	
+	console.log("latestRevision:" + latestRevision);
+
+	var recordedFolderPaths = fs.readdirSync(recordedFolderPath);
+	for (var i = 0; i < recordedFolderPaths.length; i++) {
+		console.log("recordedFolderPath:" + recordedFolderPaths[i]);
+	}
+	// 吐き出し先フォルダの一番外側を洗う(単一フォルダ?ではない。複数になるはず。でも現状は単一。)
+	// 入っているファイルに対して再起で洗う
+	// 入ってるファイルを追跡する必要がある。過去のが残ってる前提で0まで追いまくれば良いと思う。
+	// ファイルが見つかったら吐きだす。
+	// if (fs) {
+
+	// }
 }
 
-);
 
 function recordDirsAndFiles (basePath, files, newRevision, oldRevision, baseFolderPath) {
 	files.forEach(
@@ -223,5 +231,17 @@ function rm(path) {
         fs.rmdirSync(path);
     }
 };
+
+function recordedLatestRevision () {
+	var oldRev = -1;
+	var revisonDirs = fs.readdirSync(FILEMACHINE_POOL_ROOTPATH);
+	for (var i = 0; i < revisonDirs.length; i++) {
+		var revNum = parseInt(revisonDirs[i]);
+		if (!isNaN(revNum)) {
+			if (oldRev < revNum) oldRev = revNum;
+		}
+	};
+	return oldRev;
+}
 
 
