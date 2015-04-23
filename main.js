@@ -16,11 +16,10 @@ var mainWindow = null;
 var PREFIX_FILEEXT_PROXYFILE = ".prox";
 var FILEMACHINE_POOL_ROOTPATH = app.getPath("userCache");
 
+
 /*
-  https://github.com/atom/electron/blob/master/docs/api/app.md
+	app handlers
 */
-
-
 app.on('will-finish-launching', function () {
   console.log("will-finish-launching!");
 });
@@ -35,8 +34,22 @@ app.on('ready', function() {
   });
 });
 
-// handler of atom-shell's renderer
-ipc.on('synchronous-message', function(event, filePath, type) {
+app.on('window-all-closed', function() {
+  app.quit();
+});
+
+app.on('quit', function () {
+  console.log("quit!!");
+});
+
+
+/*
+	handler of atom-shell's renderer.
+*/
+/**
+	folder dropped.
+*/
+ipc.on('fileDropped', function(event, filePath, type) {
 	console.log("a:" + filePath, " b:" + type + " app.getPath:" + app.getPath("userCache"));
 	var baseFolderPath = path.join(filePath, "..");
 
@@ -73,6 +86,12 @@ ipc.on('synchronous-message', function(event, filePath, type) {
 
 	console.log("ここまで来てから帰ってる、ってことはなんかできる。");
 });
+
+ipc.on('startExport', function() {
+	console.log("exp");
+}
+
+);
 
 function recordDirsAndFiles (basePath, files, newRevision, oldRevision, baseFolderPath) {
 	files.forEach(
@@ -205,43 +224,4 @@ function rm(path) {
     }
 };
 
-// file-object ファイル読むのに使える。
-// https://github.com/atom/electron/blob/master/docs/api/file-object.md
 
-// remote 気になる。
-// https://github.com/atom/electron/blob/master/docs/api/remote.md
-
-// protocol 独自ハンドラ定義かな。
-// https://github.com/atom/electron/blob/master/docs/api/remote.md
-
-// menu これどこにでんの。
-// https://github.com/atom/electron/blob/master/docs/api/menu.md
-
-// ipc inner procedual call かな？　これでイベント呼べそう。なるほど。
-// https://github.com/atom/electron/blob/master/docs/api/ipc-renderer.md
-// https://github.com/atom/electron/blob/master/docs/api/ipc-main-process.md
-
-// dialog 使うことがあれば。
-// https://github.com/atom/electron/blob/master/docs/api/dialog.md
-
-// crash-reporter お世話になってる。
-// https://github.com/atom/electron/blob/master/docs/api/crash-reporter.md
-
-// clipboard クリップボード管理？　どうなってんだろ。どこの？
-// https://github.com/atom/electron/blob/master/docs/api/clipboard.md
-
-// window
-// https://github.com/atom/electron/blob/master/docs/api/browser-window.md
-
-// node-module の使い方とか。
-// https://github.com/atom/electron/blob/master/docs/tutorial/using-native-node-modules.md
-
-app.on('window-all-closed', function() {
-  app.quit();
-});
-
-
-
-app.on('quit', function () {
-  console.log("quit!!");
-});

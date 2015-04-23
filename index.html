@@ -6,7 +6,7 @@
 	</head>
 	<body>
 		<div id="holder" style="width:790px; height:560px;">
-			Drag files here
+			Drop files here.
 		</div>
 
 		<script>
@@ -24,12 +24,11 @@
 				var file = e.dataTransfer.files[0];
 
 				var ipc = require('ipc');
-				var result = ipc.sendSync('synchronous-message', file.path, file.type);
+				var result = ipc.sendSync('fileDropped', file.path, file.type);
 
 				console.log("result:" + result);
 				return false;
 			};
-
 		</script>
 
 	</body>
