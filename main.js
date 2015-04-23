@@ -4,6 +4,14 @@ var BrowserWindow = require('browser-window');
 // Report crashes
 require('crash-reporter').start();
 
+var fs = require('fs');
+var path = require('path');
+var crypto = require('crypto');
+var assert = require('assert');
+var ipc = require('ipc');
+
+
+
 var mainWindow = null;
 var PREFIX_FILEEXT_PROXYFILE = ".prox";
 var FILEMACHINE_POOL_ROOTPATH = app.getPath("userCache");
@@ -27,23 +35,25 @@ app.on('ready', function() {
   });
 });
 
-var fs = require('fs');
-var path = require('path');
-var crypto = require('crypto');
-
-var ipc = require('ipc');
-
-
+// handler of atom-shell's renderer
 ipc.on('synchronous-message', function(event, filePath, type) {
 	console.log("a:" + filePath, " b:" + type + " app.getPath:" + app.getPath("userCache"));
 	var baseFolderPath = path.join(filePath, "..");
 
 	// 何が放り込まれても問題ない感じだと思う。
 
+	var oldRevision = -1;
 
+	var revisonDirs = fs.readdirSync(FILEMACHINE_POOL_ROOTPATH);
+	for (var i = 0; i < revisonDirs.length; i++) {
+		var revNum = parseInt(revisonDirs[i]);
+		if (!isNaN(revNum)) {
+			oldRevision = revNum;
+		}
+	};
 
-	var newRevision = 1;
-	var oldRevision = 0;
+	var newRevision = oldRevision + 1;
+	
 
 	// generate new revision folder
 	var newRevFolderPath = path.join(FILEMACHINE_POOL_ROOTPATH, newRevision.toString());
@@ -60,8 +70,8 @@ ipc.on('synchronous-message', function(event, filePath, type) {
 	var dirsOrFiles = fs.readdirSync(filePath);
 	var basePath = filePath;
 	recordDirsAndFiles(basePath, dirsOrFiles, newRevision, oldRevision, baseFolderPath);
-	
-	console.log("ここまで来てから帰ってる");
+
+	console.log("ここまで来てから帰ってる、ってことはなんかできる。");
 });
 
 function recordDirsAndFiles (basePath, files, newRevision, oldRevision, baseFolderPath) {
@@ -73,6 +83,8 @@ function recordDirsAndFiles (basePath, files, newRevision, oldRevision, baseFold
 				var dirsOrFiles = fs.readdirSync(basePath2);
 				recordDirsAndFiles(basePath2, dirsOrFiles, newRevision, oldRevision, baseFolderPath);
 			} else {
+				if (fileOrDir.lastIndexOf(".", 0) === 0) return;
+				console.log("checking... file:" + fileOrDir);
 				var filePath1 = path.join(basePath, fileOrDir);
 				
 				var oldRevFilePath = filePath1.replace(
@@ -84,18 +96,22 @@ function recordDirsAndFiles (basePath, files, newRevision, oldRevision, baseFold
 
 				var shouldCp = shouldCopy(filePath1, oldRevFilePath);
 
+
+				var newRevDestPath = filePath1.replace(
+					baseFolderPath, 
+					path.join(FILEMACHINE_POOL_ROOTPATH, newRevision.toString())
+				);
+
+				var targetPathBase = path.join(newRevDestPath, "..");
+				if (!fs.existsSync(targetPathBase)) {
+					fs.mkdirSync(targetPathBase);
+				}
+
 				if (shouldCp) {
-					var newRevDestPath = filePath1.replace(
-						baseFolderPath, 
-						path.join(FILEMACHINE_POOL_ROOTPATH, newRevision.toString())
-					);
-					var targetPathBase = path.join(newRevDestPath, "..");
-					if (!fs.existsSync(targetPathBase)) {
-						fs.mkdirSync(targetPathBase);
-					}
 					fs.createReadStream(filePath1).pipe(fs.createWriteStream(newRevDestPath));
 				} else {// proxyを作成
-					console.log("should make proxy:" + oldRevision);
+					var newRevDestProxyFilePath = newRevDestPath + PREFIX_FILEEXT_PROXYFILE;
+					createProxyFile(newRevDestProxyFilePath, oldRevFilePath);
 				}
 			}
 		}
@@ -159,6 +175,18 @@ function shouldCopy (filePath, oldRevFilePath) {
 
 	// completely new file.
 	return true;
+}
+
+function createProxyFile (newProxyFilePath, oldRevFilePath) {
+	var oldDigest = "dummy";
+	if (fs.existsSync(oldRevFilePath)) {
+		var oldDigest = md5Digest(oldRevFilePath);
+		fs.writeFileSync(newProxyFilePath, oldDigest);
+	} else {
+		var oldProxyFilePath = oldRevFilePath + PREFIX_FILEEXT_PROXYFILE;
+		assert.ok(fs.existsSync(oldProxyFilePath), "no proxy file exist:" + oldProxyFilePath);
+		fs.createReadStream(oldProxyFilePath).pipe(fs.createWriteStream(newProxyFilePath));
+	}
 }
 
 function rm(path) {
