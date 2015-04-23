@@ -40,8 +40,8 @@ ipc.on('synchronous-message', function(event, filePath, type) {
 
 	// 何が放り込まれても問題ない感じだと思う。
 
-	
-	
+
+
 	var newRevision = 1;
 	var oldRevision = 0;
 
@@ -52,63 +52,55 @@ ipc.on('synchronous-message', function(event, filePath, type) {
 	}
 	fs.mkdirSync(newRevFolderPath);
 
-	var recFiles = function recFiles (basePath, files) {
-		files.forEach(
-			function(fileOrDir) {
-				var isDir = fs.lstatSync(path.join(basePath, fileOrDir)).isDirectory();
-				if (isDir) {
-					var basePath2 = path.join(basePath, fileOrDir);
-					fs.readdir(
-						basePath2,
-						function(err, files2) {
-							if (err) throw err;
-							recFiles(basePath2, files2);
-						}
-					);
-				} else {
-					var filePath1 = path.join(basePath, fileOrDir);
-					
-					var oldRevFilePath = filePath1.replace(
-						baseFolderPath, 
-						path.join(FILEMACHINE_POOL_ROOTPATH, oldRevision.toString())
-					);
-
-					// copy as new file or make proxy file.
-
-					var shouldCp = shouldCopy(filePath1, oldRevFilePath);
-
-					if (shouldCp) {
-						var newRevDestPath = filePath1.replace(
-							baseFolderPath, 
-							path.join(FILEMACHINE_POOL_ROOTPATH, newRevision.toString())
-						);
-						var targetPathBase = path.join(newRevDestPath, "..");
-						if (!fs.existsSync(targetPathBase)) {
-							fs.mkdirSync(targetPathBase);
-						}
-						fs.createReadStream(filePath1).pipe(fs.createWriteStream(newRevDestPath));
-					} else {// proxyを作成
-						console.log("should make proxy:" + oldRevision);
-					}
-				}
-			}
-		);
-	}
-
 	/*
 		フォルダを読みこむ
 		んで書き出す際、辞書の内容を調べないといけない。
 		一番上がフォルダな必要がある。
 	*/
-	fs.readdir(
-		filePath,
-		function(err, files){
-			if (err) throw err;
-			var basePath = filePath;
-			recFiles(basePath, files);
+	var dirsOrFiles = fs.readdirSync(filePath);
+	var basePath = filePath;
+	recordDirsAndFiles(basePath, dirsOrFiles, newRevision, oldRevision, baseFolderPath);
+	
+	console.log("ここまで来てから帰ってる");
+});
+
+function recordDirsAndFiles (basePath, files, newRevision, oldRevision, baseFolderPath) {
+	files.forEach(
+		function(fileOrDir) {
+			var isDir = fs.lstatSync(path.join(basePath, fileOrDir)).isDirectory();
+			if (isDir) {
+				var basePath2 = path.join(basePath, fileOrDir);
+				var dirsOrFiles = fs.readdirSync(basePath2);
+				recordDirsAndFiles(basePath2, dirsOrFiles, newRevision, oldRevision, baseFolderPath);
+			} else {
+				var filePath1 = path.join(basePath, fileOrDir);
+				
+				var oldRevFilePath = filePath1.replace(
+					baseFolderPath, 
+					path.join(FILEMACHINE_POOL_ROOTPATH, oldRevision.toString())
+				);
+
+				// copy as new file or make proxy file.
+
+				var shouldCp = shouldCopy(filePath1, oldRevFilePath);
+
+				if (shouldCp) {
+					var newRevDestPath = filePath1.replace(
+						baseFolderPath, 
+						path.join(FILEMACHINE_POOL_ROOTPATH, newRevision.toString())
+					);
+					var targetPathBase = path.join(newRevDestPath, "..");
+					if (!fs.existsSync(targetPathBase)) {
+						fs.mkdirSync(targetPathBase);
+					}
+					fs.createReadStream(filePath1).pipe(fs.createWriteStream(newRevDestPath));
+				} else {// proxyを作成
+					console.log("should make proxy:" + oldRevision);
+				}
+			}
 		}
 	);
-});
+}
 
 function md5Digest (filePath) {
 	var md5sum = crypto.createHash('md5');
