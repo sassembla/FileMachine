@@ -6,6 +6,7 @@ require('crash-reporter').start();
 
 var mainWindow = null;
 var PREFIX_FILEEXT_PROXYFILE = ".prox";
+var FILEMACHINE_POOL_ROOTPATH = app.getPath("userCache");
 
 /*
   https://github.com/atom/electron/blob/master/docs/api/app.md
@@ -27,12 +28,16 @@ app.on('ready', function() {
 });
 
 var fs = require('fs');
-
+var path = require('path');
 var crypto = require('crypto');
 
 var ipc = require('ipc');
-ipc.on('synchronous-message', function(event, path, type) {
-	console.log("a:" + path, " b:" + type);
+
+
+ipc.on('synchronous-message', function(event, filePath, type) {
+	console.log("a:" + filePath, " b:" + type + " app.getPath:" + app.getPath("userCache"));
+	
+	// 何が放り込まれても問題ない感じだと思う。
 
 	var dirData = {};
 	var newRevision = 1;
@@ -41,9 +46,9 @@ ipc.on('synchronous-message', function(event, path, type) {
 	var recFiles = function(basePath, files) {
 		files.forEach(
 			function(fileOrDir) {
-				var isDir = fs.lstatSync(basePath + "/" + fileOrDir).isDirectory();
+				var isDir = fs.lstatSync(path.join(basePath, fileOrDir)).isDirectory();
 				if (isDir) {
-					var basePath2 = basePath + "/" + fileOrDir;
+					var basePath2 = path.join(basePath, fileOrDir);
 					fs.readdir(
 						basePath2,
 						function(err, files2) {
@@ -52,28 +57,30 @@ ipc.on('synchronous-message', function(event, path, type) {
 						}
 					);
 				} else {
-					var filePath = basePath + "/" + fileOrDir;
-					console.log("filePath:" + filePath);
+					var filePath1 = path.join(basePath, fileOrDir);
+					console.log("filePath1:" + filePath1);
 
-					var oldRevFilePath = filePath.replace("/Users/runnershigh/Desktop/", "/Users/runnershigh/Desktop/dest/" + oldRevision + "/");
+					var oldRevFilePath = filePath1.replace(
+						"/Users/runnershigh/Desktop", 
+						path.join(FILEMACHINE_POOL_ROOTPATH, oldRevision.toString())
+					);
 					console.log("どのrevと比較するか、とかを入れるのがこの辺にくる気がする。");
-					var output = shouldCopy(filePath, oldRevFilePath);
-
-
-
-					var newRevDestPath = filePath.replace("/Users/runnershigh/Desktop/", "/Users/runnershigh/Desktop/dest/" + newRevision + "/");
+					var shouldCp = shouldCopy(filePath1, oldRevFilePath);
 
 					// 一個上のフォルダが無ければつくるしかないのか、、
 					// fs.exists('/etc/passwd', function (exists) {
 					// 	fs.mkdirSync();
 					// });
 
-					// console.log("コピーする必要があるかどうか、hashで考える。ってなると、一度ファイルのMD5とかでチェックしたほうがいいのかな。もしマッチしたら、.prc、代理でhashの書いてあるファイルを置く。");
-					// if (output) {
-					// 	fs.createReadStream(filePath).pipe(fs.createWriteStream(newRevDestPath));
-					// } else {// proxyを作成
-					// 	console.log("should make proxy:" + oldRevision);
-					// }
+					if (shouldCp) {
+						var newRevDestPath = filePath1.replace(
+							"/Users/runnershigh/Desktop", 
+							path.join(FILEMACHINE_POOL_ROOTPATH, newRevision.toString())
+						);
+						fs.createReadStream(filePath1).pipe(fs.createWriteStream(newRevDestPath));
+					} else {// proxyを作成
+						console.log("should make proxy:" + oldRevision);
+					}
 				}
 			}
 		);
@@ -82,12 +89,11 @@ ipc.on('synchronous-message', function(event, path, type) {
 	/*
 		ローディング処理を行って、終わったら返す。
 	*/
-	// データツリーを作ろう。
 	fs.readdir(
-		path,
+		filePath,
 		function(err, files){
 			if (err) throw err;
-			var basePath = path;
+			var basePath = filePath;
 			recFiles(basePath, files);
 		}
 	);
