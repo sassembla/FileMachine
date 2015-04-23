@@ -22,7 +22,8 @@ var FILEMACHINE_EXPORT_DEFAULTPATH = app.getPath("userDesktop");
 app.on('will-finish-launching', function () {
   console.log("will-finish-launching!");
 
-	var shortcutReg = globalShortcut.register('command+o', openRecord);
+  	// add shortcut register
+	var shortcutReg = globalShortcut.register('command+o', loadLatestRecord);
 	if (!shortcutReg) {
 		console.log("failed to register shortcut.");
 		app.quit();
@@ -81,25 +82,99 @@ ipc.on('fileDropped', function(event, filePath, type) {
 });
 
 
-function openRecord () {
+function loadLatestRecord () {
 	var latestRevision = recordedLatestRevision();
+	console.log("start exporting... revision:" + latestRevision);
+	
 	var recordedFolderPath = path.join(FILEMACHINE_POOL_ROOTPATH, latestRevision.toString());
 	
 	console.log("latestRevision:" + latestRevision);
 
-	var recordedFolderPaths = fs.readdirSync(recordedFolderPath);
-	for (var i = 0; i < recordedFolderPaths.length; i++) {
-		console.log("recordedFolderPath:" + recordedFolderPaths[i]);
-	}
-	// 吐き出し先フォルダの一番外側を洗う(単一フォルダ?ではない。複数になるはず。でも現状は単一。)
-	// 入っているファイルに対して再起で洗う
-	// 入ってるファイルを追跡する必要がある。過去のが残ってる前提で0まで追いまくれば良いと思う。
-	// ファイルが見つかったら吐きだす。
-	// if (fs) {
+	var topLevelFolders = fs.readdirSync(recordedFolderPath);
 
-	// }
+	// check exportable directories are already exists or not.
+	for (var i = 0; i < topLevelFolders.length; i++) {
+		
+		var baseFolderPath = path.join(recordedFolderPath, topLevelFolders[i]);
+
+		var exportCandidatePath = path.join(FILEMACHINE_EXPORT_DEFAULTPATH, topLevelFolders[i]);
+		assert.ok(!fs.existsSync(exportCandidatePath), "folder already exists. target:" + exportCandidatePath);
+	}
+
+	// every directories are fully exportable.
+	for (var i = 0; i < topLevelFolders.length; i++) {
+		var baseFolderPath = path.join(recordedFolderPath, topLevelFolders[i]);
+
+		var exportCandidatePath = path.join(FILEMACHINE_EXPORT_DEFAULTPATH, topLevelFolders[i]);
+		
+		fs.mkdirSync(exportCandidatePath);
+
+		var dirsOrFiles = fs.readdirSync(baseFolderPath);
+		loadRecordDirsAndFiles(baseFolderPath, dirsOrFiles, latestRevision);
+	}
 }
 
+function loadRecordDirsAndFiles (basePath, files, baseRevision) {
+	files.forEach(
+		function(fileOrDir) {
+			var isDir = fs.lstatSync(path.join(basePath, fileOrDir)).isDirectory();
+			if (isDir) {
+				var replacedTargetFolderPath = basePath.replace(
+					path.join(FILEMACHINE_POOL_ROOTPATH, baseRevision.toString()),
+					FILEMACHINE_EXPORT_DEFAULTPATH
+				);
+
+				var basePath2 = path.join(basePath, fileOrDir);
+				var dirsOrFiles = fs.readdirSync(basePath2);
+				loadRecordDirsAndFiles(basePath2, dirsOrFiles, baseRevision);
+			} else {
+				if (fileOrDir.lastIndexOf(".", 0) === 0) return;
+				loadValidFile(basePath, fileOrDir, baseRevision);
+			}
+		}
+	);
+}
+
+function loadValidFile (basePath, fileName, baseRevision) {
+	// if ends with PREFIX_FILEEXT_PROXYFILE, start to traverse old revision.
+	if (fileName.substr(-PREFIX_FILEEXT_PROXYFILE.length) === PREFIX_FILEEXT_PROXYFILE) {
+		var targetFileNameOfNotProxyFile = fileName.substr(0, fileName.length - PREFIX_FILEEXT_PROXYFILE.length);
+
+		var pastRev = baseRevision;
+		var basePath2 = basePath;
+		for (var moreOldRevision = baseRevision-1; 0 <= moreOldRevision; moreOldRevision--) {
+			basePath2 = basePath2.replace(
+				path.join(FILEMACHINE_POOL_ROOTPATH, pastRev.toString()),
+				path.join(FILEMACHINE_POOL_ROOTPATH, moreOldRevision.toString())
+			);
+
+			var oldCandidateNotProxyFilePath = path.join(basePath2, targetFileNameOfNotProxyFile);
+			
+			if (fs.existsSync(oldCandidateNotProxyFilePath)) {
+				loadValidFile(basePath2, targetFileNameOfNotProxyFile, moreOldRevision);
+				return;
+			}
+
+			pastRev = moreOldRevision;
+		}
+	}
+
+	// non-proxy file found.
+	var replaceSource = path.join(FILEMACHINE_POOL_ROOTPATH, baseRevision.toString());
+
+	var sourcePath = path.join(basePath, fileName);
+	var destPath = sourcePath.replace(
+		replaceSource,
+		FILEMACHINE_EXPORT_DEFAULTPATH
+	);
+
+	var parentFolder = path.join(destPath, "..");
+	if (!fs.existsSync(parentFolder)) {
+		fs.mkdirSync(parentFolder);
+	}
+
+	fs.createReadStream(sourcePath).pipe(fs.createWriteStream(destPath));
+}
 
 function recordDirsAndFiles (basePath, files, newRevision, oldRevision, baseFolderPath) {
 	files.forEach(
