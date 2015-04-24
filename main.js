@@ -30,8 +30,14 @@ app.on('will-finish-launching', function () {
 		app.quit();
 	}
 
-	var shortcutReg2 = globalShortcut.register('command+i', openRecord);
+	var shortcutReg2 = globalShortcut.register('command+shift+o', loadLatestRecordAt);
 	if (!shortcutReg2) {
+		console.log("failed to register load specific shortcut.");
+		app.quit();
+	}
+
+	var shortcutReg3 = globalShortcut.register('command+i', openRecord);
+	if (!shortcutReg3) {
 		console.log("failed to register open record shortcut.");
 		app.quit();
 	}
@@ -91,6 +97,12 @@ function openRecord () {
 	console.log("open in finder がわからん。");
 }
 
+function loadLatestRecordAt () {
+	console.log("at");
+	// トップレベルフォルダのありかたをどう考えるかだな、、やっぱ一種類に絞って、違ったの放り込んだら殴ったほうが良さそう。
+	// dialog.showOpenDialog({defaultPath:[FILEMACHINE_EXPORT_DEFAULTPATH], properties: ['openFile', 'openDirectory']});
+}
+
 /**
 	load recorded files
 */
@@ -104,7 +116,7 @@ function loadLatestRecord () {
 
 	var topLevelFolders = fs.readdirSync(recordedFolderPath);
 
-	// check exportable directories are already exists or not.
+	// check exportable directoriy is already exists or not.
 	for (var i = 0; i < topLevelFolders.length; i++) {
 		
 		var baseFolderPath = path.join(recordedFolderPath, topLevelFolders[i]);
