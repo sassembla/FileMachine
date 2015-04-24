@@ -3,7 +3,8 @@
 ver 0.5.0
 
 Automatic version control tool for image/model/texture/txt.  
-Designed for binary.
+Designed for binary.  
+with remote sync feature.(not yet implemented)
 
 ##usage
 ![filemachine](https://raw.githubusercontent.com/sassembla/filemachine/master/doc/image/interface.png "filemachine")
