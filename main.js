@@ -10,10 +10,11 @@ var crypto = require('crypto');
 var assert = require('assert');
 var ipc = require('ipc');
 var globalShortcut = require('global-shortcut');
+var dialog = require('dialog');
 
 var mainWindow = null;
 var PREFIX_FILEEXT_PROXYFILE = ".prox";
-var FILEMACHINE_POOL_ROOTPATH = app.getPath("userCache");
+var FILEMACHINE_RECORD_ROOTPATH = app.getPath("userCache");
 var FILEMACHINE_EXPORT_DEFAULTPATH = app.getPath("userDesktop");
 
 /*
@@ -23,9 +24,15 @@ app.on('will-finish-launching', function () {
   console.log("will-finish-launching!");
 
   	// add shortcut register
-	var shortcutReg = globalShortcut.register('command+o', loadLatestRecord);
-	if (!shortcutReg) {
-		console.log("failed to register shortcut.");
+	var shortcutReg1 = globalShortcut.register('command+o', loadLatestRecord);
+	if (!shortcutReg1) {
+		console.log("failed to register load shortcut.");
+		app.quit();
+	}
+
+	var shortcutReg2 = globalShortcut.register('command+i', openRecord);
+	if (!shortcutReg2) {
+		console.log("failed to register open record shortcut.");
 		app.quit();
 	}
 });
@@ -36,7 +43,7 @@ app.on('ready', function() {
   mainWindow.loadUrl('file://' + __dirname + '/index.html');
 
   mainWindow.on('closed', function() {
-    mainWindow = null;
+	mainWindow = null;
   });
 });
 
@@ -63,7 +70,7 @@ ipc.on('fileDropped', function(event, filePath, type) {
 	
 
 	// generate new revision folder
-	var newRevFolderPath = path.join(FILEMACHINE_POOL_ROOTPATH, newRevision.toString());
+	var newRevFolderPath = path.join(FILEMACHINE_RECORD_ROOTPATH, newRevision.toString());
 	if (fs.existsSync(newRevFolderPath)) {
 		rm(newRevFolderPath);
 	}
@@ -77,13 +84,21 @@ ipc.on('fileDropped', function(event, filePath, type) {
 });
 
 /**
+	open record directory
+*/
+function openRecord () {
+	dialog.showOpenDialog({defaultPath:[FILEMACHINE_RECORD_ROOTPATH], properties: ['openFile', 'openDirectory']});
+	console.log("open in finder がわからん。");
+}
+
+/**
 	load recorded files
 */
 function loadLatestRecord () {
 	var latestRevision = recordedLatestRevision();
 	console.log("start exporting... revision:" + latestRevision);
 	
-	var recordedFolderPath = path.join(FILEMACHINE_POOL_ROOTPATH, latestRevision.toString());
+	var recordedFolderPath = path.join(FILEMACHINE_RECORD_ROOTPATH, latestRevision.toString());
 	
 	console.log("latestRevision:" + latestRevision);
 
@@ -93,7 +108,7 @@ function loadLatestRecord () {
 	for (var i = 0; i < topLevelFolders.length; i++) {
 		
 		var baseFolderPath = path.join(recordedFolderPath, topLevelFolders[i]);
-
+		
 		var exportCandidatePath = path.join(FILEMACHINE_EXPORT_DEFAULTPATH, topLevelFolders[i]);
 		assert.ok(!fs.existsSync(exportCandidatePath), "folder already exists. target:" + exportCandidatePath);
 	}
@@ -117,7 +132,7 @@ function loadRecordedDirsAndFiles (basePath, files, baseRevision) {
 			var isDir = fs.lstatSync(path.join(basePath, fileOrDir)).isDirectory();
 			if (isDir) {
 				var replacedTargetFolderPath = basePath.replace(
-					path.join(FILEMACHINE_POOL_ROOTPATH, baseRevision.toString()),
+					path.join(FILEMACHINE_RECORD_ROOTPATH, baseRevision.toString()),
 					FILEMACHINE_EXPORT_DEFAULTPATH
 				);
 
@@ -141,8 +156,8 @@ function loadValidFile (basePath, fileName, baseRevision) {
 		var basePath2 = basePath;
 		for (var moreOldRevision = baseRevision-1; 0 <= moreOldRevision; moreOldRevision--) {
 			basePath2 = basePath2.replace(
-				path.join(FILEMACHINE_POOL_ROOTPATH, pastRev.toString()),
-				path.join(FILEMACHINE_POOL_ROOTPATH, moreOldRevision.toString())
+				path.join(FILEMACHINE_RECORD_ROOTPATH, pastRev.toString()),
+				path.join(FILEMACHINE_RECORD_ROOTPATH, moreOldRevision.toString())
 			);
 
 			var oldCandidateNotProxyFilePath = path.join(basePath2, targetFileNameOfNotProxyFile);
@@ -157,7 +172,7 @@ function loadValidFile (basePath, fileName, baseRevision) {
 	}
 
 	// non-proxy file found.
-	var replaceSource = path.join(FILEMACHINE_POOL_ROOTPATH, baseRevision.toString());
+	var replaceSource = path.join(FILEMACHINE_RECORD_ROOTPATH, baseRevision.toString());
 
 	var sourcePath = path.join(basePath, fileName);
 	var destPath = sourcePath.replace(
@@ -167,7 +182,7 @@ function loadValidFile (basePath, fileName, baseRevision) {
 
 	var parentFolder = path.join(destPath, "..");
 	if (!fs.existsSync(parentFolder)) {
-		fs.mkdirSync(parentFolder);
+		mkdirParent(parentFolder);
 	}
 
 	fs.createReadStream(sourcePath).pipe(fs.createWriteStream(destPath));
@@ -182,6 +197,7 @@ function recordDirsAndFiles (basePath, files, newRevision, oldRevision, baseFold
 			var isDir = fs.lstatSync(path.join(basePath, fileOrDir)).isDirectory();
 			if (isDir) {
 				var basePath2 = path.join(basePath, fileOrDir);
+
 				var dirsOrFiles = fs.readdirSync(basePath2);
 				recordDirsAndFiles(basePath2, dirsOrFiles, newRevision, oldRevision, baseFolderPath);
 			} else {
@@ -191,7 +207,7 @@ function recordDirsAndFiles (basePath, files, newRevision, oldRevision, baseFold
 				
 				var oldRevFilePath = filePath1.replace(
 					baseFolderPath, 
-					path.join(FILEMACHINE_POOL_ROOTPATH, oldRevision.toString())
+					path.join(FILEMACHINE_RECORD_ROOTPATH, oldRevision.toString())
 				);
 
 				// copy as new file or make proxy file.
@@ -201,12 +217,12 @@ function recordDirsAndFiles (basePath, files, newRevision, oldRevision, baseFold
 
 				var newRevDestPath = filePath1.replace(
 					baseFolderPath, 
-					path.join(FILEMACHINE_POOL_ROOTPATH, newRevision.toString())
+					path.join(FILEMACHINE_RECORD_ROOTPATH, newRevision.toString())
 				);
 
 				var targetPathBase = path.join(newRevDestPath, "..");
 				if (!fs.existsSync(targetPathBase)) {
-					fs.mkdirSync(targetPathBase);
+					mkdirParent(targetPathBase);
 				}
 
 				if (shouldCp) {
@@ -292,24 +308,26 @@ function createProxyFile (newProxyFilePath, oldRevFilePath) {
 }
 
 function rm(path) {
-    var files = [];
-    if( fs.existsSync(path) ) {
-        files = fs.readdirSync(path);
-        files.forEach(function(file,index){
-            var curPath = path + "/" + file;
-            if(fs.lstatSync(curPath).isDirectory()) { // recurse
-                rm(curPath);
-            } else { // delete file
-                fs.unlinkSync(curPath);
-            }
-        });
-        fs.rmdirSync(path);
-    }
+	var files = [];
+	if( fs.existsSync(path) ) {
+		files = fs.readdirSync(path);
+		files.forEach(
+			function(file,index) {
+				var curPath = path + "/" + file;
+				if(fs.lstatSync(curPath).isDirectory()) { // recurse
+					rm(curPath);
+				} else { // delete file
+					fs.unlinkSync(curPath);
+				}
+			}
+		);
+		fs.rmdirSync(path);
+	}
 };
 
 function recordedLatestRevision () {
 	var oldRev = -1;
-	var revisonDirs = fs.readdirSync(FILEMACHINE_POOL_ROOTPATH);
+	var revisonDirs = fs.readdirSync(FILEMACHINE_RECORD_ROOTPATH);
 	for (var i = 0; i < revisonDirs.length; i++) {
 		var revNum = parseInt(revisonDirs[i]);
 		if (!isNaN(revNum)) {
@@ -318,5 +336,20 @@ function recordedLatestRevision () {
 	};
 	return oldRev;
 }
+
+function mkdirParent (dirPath) {
+	try {
+		fs.mkdirSync(dirPath);
+	} catch (e) {
+		if (e.errno === -2) {
+			// create all the parents recursively
+			mkdirParent(path.dirname(dirPath));
+			
+			// and then the directory
+			mkdirParent(dirPath);
+		}
+	}
+};
+
 
 
