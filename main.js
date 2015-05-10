@@ -93,12 +93,18 @@ ipc.on('fileDropped', function(event, filePath, type) {
 	open record directory
 */
 function openRecord () {
-	dialog.showOpenDialog({defaultPath:[FILEMACHINE_RECORD_ROOTPATH], properties: ['openFile', 'openDirectory']});
-	console.log("open in finder がわからん。");
+	var result = dialog.showOpenDialog({defaultPath:[FILEMACHINE_RECORD_ROOTPATH], properties: ['openDirectory']});
+	console.log("open in finder がわからん。開くだけなので、なんかアウトプットしないとな。アウトプット先を指定とか。うーーんつらい。制約ができない result:" + result);
+
+	// /Users/runnershigh/Library/Caches/FileMachine/0
+	// 実ファイルのパスをひろってくる必要があるのか〜〜。面倒くささがある。
+
+	// WebContents.insertCSS(css)
+	mainWindow.webContents.send('ping', '/Users/runnershigh/Desktop/sample/1.jpg');
 }
 
 function loadLatestRecordAt () {
-	console.log("at");
+	console.log("at、まだ作ってない。");
 	// トップレベルフォルダのありかたをどう考えるかだな、、やっぱ一種類に絞って、違ったの放り込んだら殴ったほうが良さそう。
 	// dialog.showOpenDialog({defaultPath:[FILEMACHINE_EXPORT_DEFAULTPATH], properties: ['openFile', 'openDirectory']});
 }

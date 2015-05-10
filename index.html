@@ -5,6 +5,7 @@
 		<meta charset="UTF-8">
 	</head>
 	<body>
+
 		<div id="holder" style="width:790px; height:560px;">
 			Drop files here. 
 			<br>
@@ -35,6 +36,13 @@
 				console.log("result:" + result);
 				return false;
 			};
+
+			require('ipc').on(
+				'ping',
+				function(imageUrl) {
+					document.body.style.backgroundImage = "url(" + imageUrl + ")";
+				}
+			);
 		</script>
 
 	</body>
